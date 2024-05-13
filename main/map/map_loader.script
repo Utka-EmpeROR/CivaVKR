@@ -1,0 +1,74 @@
+require "main/modules/map"
+
+function init(self)
+	math.randomseed(os.time())
+	for q = -map_size, map_size, 1 do
+		for r = map_size, -map_size, -1 do
+			if (-q - r >= -map_size) and (-q - r <= map_size) then
+				place_hex(q, r)
+			end
+		end
+	end
+	go.delete(get_hex_go(-map_size + 1, 0))
+	cell = factory.create("#hex_factory_castle", get_real_coordinates(-map_size + 1, 0))
+	spawn_unit(-map_size + 1, 0, "castle", 0)
+	set_hex_data(-map_size + 1, 0, cell, "castle_red")
+	go.delete(get_hex_go(0, map_size - 1))
+	cell = factory.create("#hex_factory_castle", get_real_coordinates(0, map_size - 1))
+	spawn_unit(0, map_size - 1, "castle", 1)
+	set_hex_data(0, map_size - 1, cell, "castle_green")
+	go.delete(get_hex_go(map_size - 1, -map_size + 1))
+	cell = factory.create("#hex_factory_castle", get_real_coordinates(map_size - 1, -map_size + 1))
+	spawn_unit(map_size - 1, -map_size + 1, "castle", 2)
+	set_hex_data(map_size - 1, -map_size + 1, cell, "castle_blue")
+	castles_positions[0] = { -map_size + 1, 0 };
+	castles_positions[1] = { 0, map_size - 1 };
+	castles_positions[2] = { map_size - 1, -map_size + 1 };
+end
+
+function place_hex(q, r)
+	factory_list = { "#hex_factory_forest", "#hex_factory_animal", "#hex_factory_plains", "#hex_factory_clay",
+		"#hex_factory_mountain", "#hex_factory_farm" }
+	position = get_real_coordinates(q, r)
+	rnd = math.random(#factory_list)
+	local type = factory_list[rnd]
+	cell = factory.create(type, position)
+	set_hex_data(q, r, cell, get_hex_type_by_factory(type))
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

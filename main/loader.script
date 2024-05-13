@@ -1,0 +1,91 @@
+local function load_menu(self)
+	msg.post("go#main_menu", "load")
+	msg.post("go#main_menu", "enable")
+end
+
+local function unload_menu(self)
+	msg.post("go#main_menu", "disable")
+	msg.post("go#main_menu", "final")
+	msg.post("go#main_menu", "unload")
+end
+
+local function load_main(self)
+	msg.post("go#main", "load")
+	msg.post("go#main", "enable")
+end
+
+local function unload_game(self)
+	msg.post("go#main", "disable")
+	msg.post("go#main", "final")
+	msg.post("go#main", "unload")
+end
+
+local function load_end(self, winner)
+	msg.post("go#end", "load")
+	msg.post("go#end", "enable")
+end
+
+local function unload_end(self)
+	msg.post("go#end", "unload")
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("start_game") then
+		unload_menu(self)
+		load_main(self)
+	elseif message_id == hash("game_over") then
+		self.winner = message.winner
+		unload_game(self)
+		load_end(self)
+	elseif message_id == hash("restart") then
+		unload_end(self)
+		load_main(self)
+	elseif message_id == hash("end_loaded") then
+		msg.post("end:/gui#end", "winner", { winner = self.winner })
+	end
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	load_menu(self)
+	self.winner = nil
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

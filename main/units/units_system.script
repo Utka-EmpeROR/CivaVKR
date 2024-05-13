@@ -1,0 +1,168 @@
+require "main/modules/map"
+require "main/modules/units"
+require "main/modules/buildings"
+require "main/modules/resources"
+
+function init(self)
+end
+
+---@param unit unit
+local function set_unit_hp(unit)
+	local url = msg.url(nil, unit.go, "hp")
+	label.set_text(url, unit.current_hp .. "/" .. unit.max_hp)
+end
+
+---move unit to new position
+---@param old_q integer
+---@param old_r integer
+---@param new_q integer
+---@param new_r integer
+function move_unit(old_q, old_r, new_q, new_r)
+	-- maybe some animations later
+	units_table[get_unit_key(new_q, new_r)] = units_table[get_unit_key(old_q, old_r)]
+	units_table[get_unit_key(old_q, old_r)] = nil
+	go.set_position(get_real_coordinates_for_units(new_q, new_r), get_unit(new_q, new_r).go) -- actually swap positions
+	units_table[get_unit_key(new_q, new_r)].current_movement_distance = units_table[get_unit_key(new_q, new_r)]
+		.current_movement_distance -
+		get_distance(old_q, old_r, new_q, new_r)
+end
+
+---spawn unit on cell
+---@param r integer
+---@param q integer
+---@param properties unit
+local function _spawn_unit(q, r, properties, side)
+	local unit = factory.create("#units_factory")
+	local new_properties = properties
+	new_properties.go = unit
+	new_properties.side = side
+	set_unit_data(q, r, new_properties)
+	msg.post(unit, "play_animation", { id = hash(properties.name) })
+	local real_coordinates = get_real_coordinates_for_units(q, r)
+	local tint = vmath.vector4(1, 1, 1, 1)
+	if (side == 1) then
+		tint.x = 0
+		tint.z = 0
+	elseif (side == 2) then
+		tint.y = 0
+		tint.z = 0
+	end
+	local url = msg.url(nil, unit, "sprite")
+	go.set(url, "tint", tint)
+	if (properties.name == "castle") then
+		go.set(url, "scale", vmath.vector3(0.5, 0.5, 0.5))
+	end
+	go.set_position(real_coordinates, unit)
+	set_unit_hp(get_unit(q, r))
+	if (properties.name ~= "castle") then
+		remove_resources(side, properties.cost)
+	end
+end
+
+---spawn unit on cell
+---@param r integer
+---@param q integer
+---@param name string:
+function spawn_unit(q, r, name, side)
+	_spawn_unit(q, r, get_unit_properties(name), side)
+end
+
+---Kill the unit
+---@param unit_q integer
+---@param unit_r integer
+function kill_unit(unit_q, unit_r)
+	local unit = get_unit(unit_q, unit_r)
+	units_table[get_unit_key(unit_q, unit_r)] = nil
+	go.delete(unit.go)
+	if (unit.name == "castle") then
+		msg.post("#game_controller", "castle_destroyed", { which = unit.side })
+		print("Castle " .. unit.side .. " destroyed")
+	end
+end
+
+---Does damage to defender, for now without any counterattacks and changing places
+---@param defender_q integer
+---@param defender_r integer
+---@param attacker_q integer
+---@param attacker_r integer
+local function do_damage_by_coordinates(defender_q, defender_r, attacker_q, attacker_r)
+	-- later some animations
+	local defender = get_unit(defender_q, defender_r)
+	local attacker = get_unit(attacker_q, attacker_r)
+	attacker.can_attack = false
+	defender.current_hp = defender.current_hp - (attacker.attack - defender.defence)
+	set_unit_hp(defender)
+	if (defender.current_hp <= 0) then
+		kill_unit(defender_q, defender_r)
+	end
+end
+
+---Does damage to defender by tower
+---@param defender_q integer
+---@param defender_r integer
+local function do_damage_by_tower(defender_q, defender_r, attacker_q, attacker_r)
+	-- later some animations
+	local defender = get_unit(defender_q, defender_r)
+	if (defender == nil) then
+		return
+	end
+	defender.current_hp = defender.current_hp - tower_damage
+	set_unit_hp(defender)
+	if (defender.current_hp <= 0) then
+		kill_unit(defender_q, defender_r)
+	end
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	if (message_id == hash("spawn_unit")) then
+		spawn_unit(message.q, message.r, message.name, message.side)
+	elseif (message_id == hash("move_unit")) then
+		move_unit(message.q, message.r, message.new_q, message.new_r)
+	elseif (message_id == hash("do_damage")) then
+		do_damage_by_coordinates(message.q, message.r, message.new_q, message.new_r)
+	elseif (message_id == hash("do_damage_by_tower")) then
+		do_damage_by_tower(message.q, message.r)
+	end
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

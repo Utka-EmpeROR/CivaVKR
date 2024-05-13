@@ -1,0 +1,311 @@
+
+®L
+ÉLfunction init(self)
+	self.my_turn = false
+	self.work_in_progress = false
+	self.ai_number_turn = 1
+	self.ai_table_for_units_count = {}
+	self.ai_delay = 0.5 -- in seconds
+	for i = 1, players_count, 1 do
+		self.ai_table_for_units_count[i] = {}
+		for _, name in ipairs(units_names) do
+			self.ai_table_for_units_count[i][name] = 0
+		end
+	end
+	-- Add initialization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+local function start_ai_turn(self)
+	self.my_turn = true
+	self.work_in_progress = false
+	self.ai_number_turn = 1
+end
+
+local function start_specific_ai_turn(self)
+	for _, name in ipairs(units_names) do
+		self.ai_table_for_units_count[self.ai_number_turn][name] = 0
+	end
+	for q = -map_size, map_size, 1 do
+		for r = -map_size, map_size, 1 do
+			local unit = get_unit(q, r)
+			if unit ~= nil and unit.side == self.ai_number_turn and unit.name ~= "castle" then
+				self.ai_table_for_units_count[self.ai_number_turn][unit.name] =
+					self.ai_table_for_units_count[self.ai_number_turn][unit.name] + 1
+			end
+		end
+	end
+end
+
+local function do_damage(defender_q, defender_r, attacker_q, attacker_r)
+	msg.post("#units_system", "do_damage", { q = defender_q, r = defender_r, new_q = attacker_q, new_r = attacker_r })
+end
+
+local function move_unit(self, old_q, old_r, new_q, new_r)
+	msg.post("#units_system", "move_unit", { q = old_q, r = old_r, new_q = new_q, new_r = new_r })
+end
+
+---@return boolean success
+local function spawn_unit(self, unit_type)
+	local possible = hex_reachable(castles_positions[self.ai_number_turn], 1, self.ai_number_turn)
+	for _, hex in ipairs(possible) do
+		if (get_unit(hex[1], hex[2]) == nil) then
+			msg.post("#units_system", "spawn_unit",
+				{ q = hex[1], r = hex[2], name = unit_type, side = self.ai_number_turn })
+			self.ai_table_for_units_count[self.ai_number_turn][unit_type] =
+				self.ai_table_for_units_count[self.ai_number_turn][unit_type] + 1
+			return true
+		end
+	end
+	return false
+end
+
+local function comporator(a, b)
+	if a[1] < b[1] then
+		return true
+	end
+	return false
+end
+
+---@return integer|nil, integer|nil
+local function select_unit_to_move(self)
+	for q = -map_size, map_size, 1 do
+		for r = -map_size, map_size, 1 do
+			local unit = get_unit(q, r)
+			if (unit ~= nil and
+					unit.side == self.ai_number_turn and
+					unit.current_movement_distance ~= 0) then
+				return q, r
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function calculate_cost(self, selected_unit_q, selected_unit_r, dest_q, dest_r)
+	local cost = 0
+	cost = cost + units_ai_cost[get_unit(dest_q, dest_r).name]
+	local distance = get_distance(selected_unit_q, selected_unit_r, dest_q, dest_r)
+	local selected_unit = get_unit(selected_unit_q, selected_unit_r)
+	if (distance < selected_unit.attack_range + selected_unit.current_movement_distance
+			and selected_unit.can_attack) then
+		cost = cost + 10
+	end
+	cost = cost -
+		((distance - selected_unit.attack_range - selected_unit.current_movement_distance) /
+			selected_unit.max_movement_distance) * 10
+	return -cost
+end
+
+---@return integer|nil, integer|nil q r
+local function select_unit_destanation(self, selected_unit_q, selected_unit_r)
+	local units_with_cost = {}
+	for q = -map_size, map_size, 1 do
+		for r = -map_size, map_size, 1 do
+			local unit = get_unit(q, r)
+			if (unit ~= nil and
+					unit.side ~= self.ai_number_turn) then
+				table.insert(units_with_cost, { calculate_cost(self, selected_unit_q, selected_unit_r, q, r), { q, r } })
+			end
+		end
+	end
+	table.sort(units_with_cost, comporator)
+	return units_with_cost[1][2][1], units_with_cost[1][2][2]
+end
+
+---@return integer|nil, integer|nil q r
+local function select_where_to_move(self, selected_unit_q, selected_unit_r)
+	local reachable = hex_reachable({ selected_unit_q, selected_unit_r },
+		get_unit(selected_unit_q, selected_unit_r).current_movement_distance, self.ai_number_turn)
+	local dest_q, dest_r = select_unit_destanation(self, selected_unit_q, selected_unit_r)
+	local hexes_with_distances = {}
+	for _, hex in ipairs(reachable) do
+		-- TODO normally
+		local hex_to_move_q, hex_to_move_r = hex[1], hex[2]
+		if (get_distance(selected_unit_q, selected_unit_r, hex_to_move_q, hex_to_move_r) ~= 0) then
+			table.insert(hexes_with_distances,
+				{ get_distance(dest_q, dest_r, hex_to_move_q, hex_to_move_r), hex })
+		end
+	end
+	table.sort(hexes_with_distances, comporator)
+	if hexes_with_distances ~= nil and next(hexes_with_distances) ~= nil then
+		return hexes_with_distances[1][2][1], hexes_with_distances[1][2][2]
+	end
+	return nil, nil
+end
+
+
+local function select_who_attack(self, selected_unit_q, selected_unit_r)
+	local unit = get_unit(selected_unit_q, selected_unit_r)
+	local reachable = hexes_in_range({ selected_unit_q, selected_unit_r }, unit.attack_range)
+	local units_with_scores = {}
+	for _, hex in ipairs(reachable) do
+		local new_unit = get_unit(hex[1], hex[2])
+		if (new_unit ~= nil and
+				new_unit.side ~= self.ai_number_turn) then
+			table.insert(units_with_scores,
+				{ calculate_cost(self, selected_unit_q, selected_unit_r, hex[1], hex[2]), hex })
+		end
+	end
+	table.sort(units_with_scores, comporator)
+	return units_with_scores[1][2][1], units_with_scores[1][2][2]
+end
+
+local function select_unit_to_attack(self)
+	for q = -map_size, map_size, 1 do
+		for r = -map_size, map_size, 1 do
+			local unit = get_unit(q, r)
+			if (unit ~= nil and
+					unit.side == self.ai_number_turn and
+					unit.can_attack) then
+				local reachable = hexes_in_range({ q, r }, unit.attack_range)
+				for _, hex in ipairs(reachable) do
+					local new_unit = get_unit(hex[1], hex[2])
+					if (new_unit ~= nil and
+							new_unit.side ~= self.ai_number_turn) then
+						return q, r
+					end
+				end
+			end
+		end
+	end
+end
+
+---@return string|nil
+local function select_unit_to_spawn(self)
+	values = {}
+	for _, name in ipairs(units_names) do
+		table.insert(values,
+			{ (self.ai_table_for_units_count[self.ai_number_turn][name] + 1), name })
+	end
+	table.sort(values, comporator)
+	if values ~= nil and next(values) ~= nil then
+		return values[1][2]
+	end
+	return nil
+end
+
+---@return boolean result
+local function select_work(self)
+	local selected_unit_to_spawn = select_unit_to_spawn(self)
+	if (selected_unit_to_spawn ~= nil) then
+		if (can_buy_by_cost(self.ai_number_turn, get_unit_properties(selected_unit_to_spawn).cost)) then
+			if (spawn_unit(self, selected_unit_to_spawn)) then
+				return true
+			end
+		end
+	end
+	local selected_unit_q, selected_unit_r = select_unit_to_move(self)
+	if (selected_unit_q ~= nil) then
+		local new_q, new_r = select_where_to_move(self, selected_unit_q, selected_unit_r)
+		if (new_q ~= nil) then
+			move_unit(self, selected_unit_q, selected_unit_r, new_q, new_r)
+			return true
+		end
+	end
+	selected_unit_q, selected_unit_r = select_unit_to_attack(self)
+	if (selected_unit_q ~= nil) then
+		local dest_q, dest_r = select_who_attack(self, selected_unit_q, selected_unit_r)
+		if (dest_q ~= nil) then
+			do_damage(dest_q, dest_r, selected_unit_q, selected_unit_r)
+			return true
+		end
+	end
+
+	return false
+end
+
+local function work_done(self)
+	self.work_in_progress = false
+end
+
+local function end_ai_turn(self)
+	self.my_turn = false
+	self.work_in_progress = false
+	self.ai_number_turn = 1
+	msg.post("#game_controller", "end_ai_turn")
+end
+
+local function pass_the_turn(self)
+	msg.post("#buildings_system", "new_step", { side = self.ai_number_turn })
+	self.ai_number_turn = self.ai_number_turn + 1
+	if (self.ai_number_turn > players_count) then
+		end_ai_turn(self)
+	else
+		start_specific_ai_turn(self)
+	end
+end
+
+local function check_castle(self)
+	castle_q, castle_r = castles_positions[self.ai_number_turn][1], castles_positions[self.ai_number_turn][2]
+	if (get_unit(castle_q, castle_r) == nil or get_unit(castle_q, castle_r).name ~= "castle") then
+		return false
+	end
+	return true
+end
+
+function update(self, dt)
+	if (self.my_turn) then
+		if (not self.work_in_progress) then
+			if (not check_castle(self)) then
+				pass_the_turn(self)
+			end
+			timer.delay(self.ai_delay, false, work_done)
+			if (select_work(self)) then
+				self.work_in_progress = true
+			else
+				pass_the_turn(self)
+			end
+		end
+	end
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("ai_turn") then
+		start_ai_turn(self)
+		start_specific_ai_turn(self)
+	elseif message_id == hash("game_over") then
+		self.my_turn = false
+	end
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end
+ @main/units/ai_controller.script" 

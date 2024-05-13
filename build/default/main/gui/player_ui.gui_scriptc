@@ -1,0 +1,425 @@
+
+Õu
+²urequire "main/modules/units"
+require "main/modules/map"
+require "main/modules/resources"
+require "main/modules/gui_data"
+
+
+local function update_resources(self)
+	gui.set_text(gold, resources_table[player_id].gold .. "(+" .. resources_table[player_id].gold_income .. ")");
+	gui.set_text(wood, resources_table[player_id].wood .. "(+" .. resources_table[player_id].wood_income .. ")");
+	gui.set_text(metal, resources_table[player_id].metal .. "(+" .. resources_table[player_id].metal_income .. ")");
+	gui.set_text(wheat, resources_table[player_id].wheat .. "(+" .. resources_table[player_id].wheat_income .. ")");
+
+	for _, name in ipairs(units_names) do
+		if (name ~= self.selected_unit_to_spawn) then
+			if (can_buy_by_cost(player_id, get_unit_properties(name).cost)) then
+				gui.set_color(gui_choise[name], vmath.vector4(1, 1, 1, 1))
+			else
+				gui.set_color(gui_choise[name], vmath.vector4(1, 0.7, 0.7, 0.7))
+			end
+		end
+	end
+
+	for _, name in ipairs(buildings_types) do
+		if (name ~= self.selected_building_to_spawn) then
+			if can_buy_by_cost(player_id, get_building_properties(name).cost) then
+				gui.set_color(gui_choise[name], vmath.vector4(1, 1, 1, 1))
+			else
+				gui.set_color(gui_choise[name], vmath.vector4(1, 0.7, 0.7, 0.7))
+			end
+		end
+	end
+
+
+	for _, name in ipairs(exchange_table_resources_names) do
+		local node = gui.get_node("buy_" .. name)
+		if (resources_table[player_id].gold >= -exchange_table["buy_" .. name].gold) then
+			gui.set_color(node, vmath.vector4(0.8, 0.8, 0.8, 1))
+		else
+			gui.set_color(node, vmath.vector4(1, 0.7, 0.7, 0.7))
+		end
+		local node = gui.get_node("sell_" .. name)
+		if (resources_table[player_id][name] >= -exchange_table["sell_" .. name][name]) then
+			gui.set_color(node, vmath.vector4(0.8, 0.8, 0.8, 1))
+		else
+			gui.set_color(node, vmath.vector4(1, 0.7, 0.7, 0.7))
+		end
+	end
+end
+
+local function init_exchange_panel(self)
+	for _, name in ipairs(exchange_table_resources_names) do
+		local new_name = "buy_" .. name
+		local node_resource = gui.get_node(new_name .. "_" .. name)
+		local node_gold = gui.get_node(new_name .. "_" .. "gold")
+		if (exchange_table[new_name][name] > 0) then
+			gui.set_text(node_resource, "+" .. exchange_table[new_name][name])
+		else
+			gui.set_text(node_resource, exchange_table[new_name][name])
+		end
+		if (exchange_table[new_name].gold > 0) then
+			gui.set_text(node_gold, "+" .. exchange_table[new_name].gold)
+		else
+			gui.set_text(node_gold, exchange_table[new_name].gold)
+		end
+		local new_name = "sell_" .. name
+		local node_resource = gui.get_node(new_name .. "_" .. name)
+		local node_gold = gui.get_node(new_name .. "_" .. "gold")
+		if (exchange_table[new_name][name] > 0) then
+			gui.set_text(node_resource, "+" .. exchange_table[new_name][name])
+		else
+			gui.set_text(node_resource, exchange_table[new_name][name])
+		end
+		if (exchange_table[new_name].gold > 0) then
+			gui.set_text(node_gold, "+" .. exchange_table[new_name].gold)
+		else
+			gui.set_text(node_gold, exchange_table[new_name].gold)
+		end
+	end
+end
+
+local function init_unit_properties(self, unit_name)
+	local attack = gui.get_node(unit_name .. "_attack")
+	gui.set_text(attack, "Damage: " .. get_unit_properties(unit_name).attack)
+	local defence = gui.get_node(unit_name .. "_defence")
+	gui.set_text(defence, "Defence: " .. get_unit_properties(unit_name).defence)
+	local attack_range = gui.get_node(unit_name .. "_attack_range")
+	gui.set_text(attack_range, "Range: " .. get_unit_properties(unit_name).attack_range)
+	local movement_distance = gui.get_node(unit_name .. "_movement_distance")
+	gui.set_text(movement_distance, "Moves: " .. get_unit_properties(unit_name).max_movement_distance)
+	for _, resource in ipairs(resources_names) do
+		local cost = gui.get_node(unit_name .. "_cost_" .. resource)
+		gui.set_text(cost, get_unit_properties(unit_name).cost[resource])
+	end
+end
+
+local function init_building_properties(self, building_type)
+	local hp = gui.get_node(building_type .. "_hp")
+	gui.set_text(hp, "Max HP: " .. get_building_properties(building_type).max_hp)
+	for _, resource in ipairs(resources_names) do
+		local cost = gui.get_node(building_type .. "_cost_" .. resource)
+		gui.set_text(cost, get_building_properties(building_type).cost[resource])
+	end
+end
+
+local function swap_state_to_units(self)
+	if (self.state == "units") then
+		return
+	end
+	self.state = "units"
+	gui.set_color(buildings_checkbox, vmath.vector3(30 / 255, 30 / 255, 30 / 255))
+	gui.set_color(units_checkbox, vmath.vector3(1, 1, 1))
+
+	gui.set_enabled(select_collector, false)
+	gui.set_enabled(select_tower, false)
+	gui.set_enabled(select_wall, false)
+
+	gui.set_enabled(select_archer, true)
+	gui.set_enabled(select_lancer, true)
+	gui.set_enabled(select_cavalier, true)
+	gui.set_enabled(select_dragon, true)
+end
+
+local function swap_state_to_buildings(self)
+	if (self.state == "buildings") then
+		return
+	end
+	self.state = "buildings"
+	gui.set_color(buildings_checkbox, vmath.vector3(1, 1, 1))
+	gui.set_color(units_checkbox, vmath.vector3(30 / 255, 30 / 255, 30 / 255))
+
+	gui.set_enabled(select_archer, false)
+	gui.set_enabled(select_lancer, false)
+	gui.set_enabled(select_cavalier, false)
+	gui.set_enabled(select_dragon, false)
+
+	gui.set_enabled(select_collector, true)
+	gui.set_enabled(select_tower, true)
+	gui.set_enabled(select_wall, true)
+end
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	self.selected_unit_to_spawn = nil
+	self.selected_building_to_spawn = nil
+	end_turn_button = gui.get_node("end_turn")
+	end_turn_text = gui.get_node("end_turn_text")
+	select_lancer = gui.get_node("select_lancer")
+	select_archer = gui.get_node("select_archer")
+	select_cavalier = gui.get_node("select_cavalier")
+	select_dragon = gui.get_node("select_dragon")
+	select_collector = gui.get_node("select_collector")
+	select_tower = gui.get_node("select_tower")
+	select_wall = gui.get_node("select_wall")
+	unit_box = gui.get_node("unit_box")
+	unit_name = gui.get_node("unit_name")
+	movement_distance = gui.get_node("movement_distance")
+	damage = gui.get_node("damage")
+	defence = gui.get_node("defence")
+	attack_range = gui.get_node("attack_range")
+	can_attack = gui.get_node("can_attack")
+	can_attack_box = gui.get_node("can_attack_box")
+	gold = gui.get_node("gold")
+	wood = gui.get_node("wood")
+	metal = gui.get_node("metal")
+	wheat = gui.get_node("wheat")
+	buy_wood = gui.get_node("buy_wood")
+	buy_wheat = gui.get_node("buy_wheat")
+	buy_metal = gui.get_node("buy_metal")
+	sell_wood = gui.get_node("sell_wood")
+	sell_wheat = gui.get_node("sell_wheat")
+	sell_metal = gui.get_node("sell_metal")
+	gui_choise =
+	{
+		["lancer"] = select_lancer,
+		["archer"] = select_archer,
+		["cavalier"] = select_cavalier,
+		["dragon"] = select_dragon,
+		["wall"] = select_wall,
+		["collector"] = select_collector,
+		["tower"] = select_tower
+	}
+	init_unit_properties(self, 'lancer')
+	init_unit_properties(self, 'archer')
+	init_unit_properties(self, 'cavalier')
+	init_unit_properties(self, 'dragon')
+	init_building_properties(self, 'collector')
+	init_building_properties(self, 'tower')
+	init_building_properties(self, 'wall')
+	bottom_box = gui.get_node("bottom_box")
+	resources_box = gui.get_node("resources_box")
+	units_checkbox = gui.get_node("units_checkbox")
+	buildings_checkbox = gui.get_node("buildings_checkbox")
+	swap_state_to_units(self)
+	init_exchange_panel(self)
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	update_resources(self)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+local function select_unit(self, q, r)
+	local unit = get_unit(q, r)
+	gui.set_text(unit_name, unit_names[unit.name])
+	gui.set_text(movement_distance, unit.current_movement_distance .. "/" .. unit.max_movement_distance)
+	gui.set_text(damage, unit.attack)
+	gui.set_text(defence, unit.defence)
+	gui.set_text(attack_range, unit.attack_range)
+	if (unit.can_attack) then
+		gui.set_color(can_attack, vmath.vector3(0, 1, 0))
+		gui.set_text(can_attack, "Yes")
+	else
+		gui.set_color(can_attack, vmath.vector3(1, 0, 0))
+		gui.set_text(can_attack, "No")
+	end
+	gui.animate(unit_box, "position", vmath.vector3(1143, 609, 0), gui.EASING_OUTEXPO, 0.5)
+end
+
+local function select_opponent_unit(self, q, r)
+	local unit = get_unit(q, r)
+	gui.set_text(unit_name, unit_names[unit.name])
+	gui.set_text(movement_distance, unit.max_movement_distance)
+	gui.set_text(damage, unit.attack)
+	gui.set_text(defence, unit.defence)
+	gui.set_text(attack_range, unit.attack_range)
+	gui.set_enabled(can_attack_box, false)
+	gui.animate(unit_box, "position", vmath.vector3(1143, 609, 0), gui.EASING_OUTEXPO, 0.5)
+end
+
+function on_message(self, message_id, message, sender)
+	if (message_id == hash("game_over")) then
+		game_over = true
+		if (message.winner == player_id) then
+			print("you win")
+		else
+			print("you lose")
+		end
+	elseif (message_id == hash("new_turn")) then
+		update_resources(self)
+		msg.post('.', "acquire_input_focus")
+		print("new_turn")
+		gui.set_text(end_turn_text, "End turn")
+	elseif (message_id == hash("select_unit")) then
+		select_unit(self, message.q, message.r)
+	elseif (message_id == hash("select_opponent_unit")) then
+		select_opponent_unit(self, message.q, message.r)
+	end
+end
+
+local function deselect_unit(self)
+	self.selected_unit_to_spawn = nil
+	self.selected_building_to_spawn = nil
+	gui.animate(unit_box, "position", vmath.vector3(1443, 609, 0), gui.EASING_OUTBACK, 0.5)
+	gui.set_enabled(can_attack, true)
+end
+
+local function end_turn(self)
+	deselect_unit(self)
+	print("end_turn")
+	gui.set_text(end_turn_text, "Ai turn...")
+	msg.post('.', "release_input_focus")
+	msg.post('game#buildings_system', "new_step", { side = player_id })
+	msg.post('game', "end_turn")
+	msg.post('camera', "end_turn")
+end
+
+local function glow_on_selection_spawn(self)
+	msg.post("camera", "glow_on_selection_spawn")
+	gui.set_color(gui_choise[self.selected_unit_to_spawn], vmath.vector4(1.1, 1.4, 1, 1.4))
+end
+
+local function glow_on_building_spawn(self)
+	msg.post("camera", "glow_on_building_spawn")
+	gui.set_color(gui_choise[self.selected_building_to_spawn], vmath.vector4(1.1, 1.4, 1, 1.4))
+end
+
+local function select_unit_to_spawn(self, type)
+	if (self.selected_unit_to_spawn ~= nil) then
+		gui.set_color(gui_choise[self.selected_unit_to_spawn], vmath.vector4(1, 1, 1, 1.))
+	end
+	if (self.selected_building_to_spawn ~= nil) then
+		gui.set_color(gui_choise[self.selected_building_to_spawn], vmath.vector4(1, 1, 1, 1.))
+	end
+	deselect_unit(self)
+	if not can_buy_by_cost(player_id, get_unit_properties(type).cost) then
+		return
+	end
+	self.selected_unit_to_spawn = type
+	glow_on_selection_spawn(self)
+end
+
+local function select_building_to_spawn(self, type)
+	if (self.selected_unit_to_spawn ~= nil) then
+		gui.set_color(gui_choise[self.selected_unit_to_spawn], vmath.vector4(1, 1, 1, 1.))
+	end
+	if (self.selected_building_to_spawn ~= nil) then
+		gui.set_color(gui_choise[self.selected_building_to_spawn], vmath.vector4(1, 1, 1, 1.))
+	end
+	deselect_unit(self)
+	if not can_buy_by_cost(player_id, get_building_properties(type).cost) then
+		return
+	end
+	self.selected_building_to_spawn = type
+	glow_on_building_spawn(self)
+end
+
+
+function on_input(self, action_id, action)
+	if (game_over) then
+		return
+	end
+
+	if (action_id == hash("touch") and action.pressed) then
+		if (gui.pick_node(end_turn_button, action.x, action.y)) then
+			end_turn(self)
+			return
+		end
+		if (gui.pick_node(select_archer, action.x, action.y) and gui.is_enabled(select_archer)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_unit_to_spawn(self, "archer")
+			return
+		end
+		if (gui.pick_node(select_cavalier, action.x, action.y) and gui.is_enabled(select_cavalier)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_unit_to_spawn(self, "cavalier")
+			return
+		end
+		if (gui.pick_node(select_dragon, action.x, action.y) and gui.is_enabled(select_dragon)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_unit_to_spawn(self, "dragon")
+			return
+		end
+		if (gui.pick_node(select_lancer, action.x, action.y) and gui.is_enabled(select_lancer)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_unit_to_spawn(self, "lancer")
+			return
+		end
+		if (gui.pick_node(select_collector, action.x, action.y) and gui.is_enabled(select_collector)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_building_to_spawn(self, "collector")
+			return
+		end
+		if (gui.pick_node(select_tower, action.x, action.y) and gui.is_enabled(select_tower)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_building_to_spawn(self, "tower")
+			return
+		end
+		if (gui.pick_node(select_wall, action.x, action.y) and gui.is_enabled(select_wall)) then
+			msg.post("camera#map_ui", "hide_icons")
+			select_building_to_spawn(self, "wall")
+			return
+		end
+		if (gui.pick_node(units_checkbox, action.x, action.y)) then
+			deselect_unit(self)
+			msg.post("camera#map_ui", "hide_icons")
+			swap_state_to_units(self)
+			return
+		end
+		if (gui.pick_node(buildings_checkbox, action.x, action.y)) then
+			deselect_unit(self)
+			msg.post("camera#map_ui", "hide_icons")
+			swap_state_to_buildings(self)
+			return
+		end
+		for _, name in ipairs(exchange_table_resources_names) do
+			local node = gui.get_node("buy_" .. name)
+			if (gui.pick_node(node, action.x, action.y)) then
+				if (resources_table[player_id].gold >= -exchange_table["buy_" .. name].gold) then
+					resources_table[player_id].gold = resources_table[player_id].gold +
+						exchange_table["buy_" .. name].gold
+					resources_table[player_id][name] = resources_table[player_id][name] +
+						exchange_table["buy_" .. name][name]
+				end
+			end
+			local node = gui.get_node("sell_" .. name)
+			if (gui.pick_node(node, action.x, action.y)) then
+				if (resources_table[player_id][name] >= -exchange_table["sell_" .. name][name]) then
+					resources_table[player_id].gold = resources_table[player_id].gold +
+						exchange_table["sell_" .. name].gold
+					resources_table[player_id][name] = resources_table[player_id][name] +
+						exchange_table["sell_" .. name][name]
+				end
+			end
+		end
+		if (gui.pick_node(bottom_box, action.x, action.y) or gui.pick_node(resources_box, action.x, action.y)) then
+			return
+		end
+
+		msg.post("camera#map_ui", "click_on_map",
+			{
+				action = action,
+				selected_unit_to_spawn = self.selected_unit_to_spawn,
+				selected_building_to_spawn = self
+					.selected_building_to_spawn
+			})
+
+		deselect_unit(self)
+	end
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end
+@main/gui/player_ui.gui_scriptmain/modules/unitsmain/modules/mapmain/modules/resourcesmain/modules/gui_data/main/modules/units.luac/main/modules/map.luac/main/modules/resources.luac/main/modules/gui_data.luac" 

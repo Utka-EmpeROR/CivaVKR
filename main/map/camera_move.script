@@ -1,0 +1,64 @@
+require "main/modules/map"
+
+function init(self)
+	msg.post("#camera1", "acquire_camera_focus")
+	msg.post(".", "acquire_input_focus")
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+end
+
+function on_input(self, action_id, action)
+	local speed = 5 -- скорость перемещения
+
+	-- Вывод в консоль координат клика (кубических) и типа клетки по которой кликнули
+	if action_id == hash("touch") and action.pressed then
+		local camera_position = go.get_position()
+		local mouse_x = action.x
+		local mouse_y = action.y
+		local real_mouse_x = mouse_x + camera_position.x
+		local real_mouse_y = mouse_y + camera_position.y
+		q,r = get_cube_coordinates(real_mouse_x, real_mouse_y)
+		print(q,r)
+		print(get_hex_type(q, r))
+	end
+
+	-- Обработка нажатий клавишь для перемещения камеры
+	if action_id == hash("camera_left") then
+		go.set_position(go.get_position() - vmath.vector3(speed, 0, 0))
+	elseif action_id == hash("camera_right") then
+		go.set_position(go.get_position() + vmath.vector3(speed, 0, 0))
+	elseif action_id == hash("camera_up") then
+		go.set_position(go.get_position() + vmath.vector3(0, speed, 0))
+	elseif action_id == hash("camera_down") then
+		go.set_position(go.get_position() - vmath.vector3(0, speed, 0))
+	end
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

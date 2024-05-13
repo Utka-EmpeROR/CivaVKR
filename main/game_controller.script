@@ -1,0 +1,136 @@
+require "main/modules/resources"
+require "main/modules/buildings"
+
+function init(self)
+	self.x = 0
+	self.destroyed_castles = 0
+	game_over = false
+	player_id = 0 -- always 0
+	players_count = 2
+	for i = 0, players_count, 1 do
+		resources_table[i] = {}
+		resources_table[i].gold = 10
+		resources_table[i].metal = 5
+		resources_table[i].wood = 5
+		resources_table[i].wheat = 5
+		resources_table[i].gold_income = 5
+		resources_table[i].metal_income = 1
+		resources_table[i].wood_income = 2
+		resources_table[i].wheat_income = 2
+	end
+	-- Add initialization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function final(self)
+	for q = -map_size, map_size, 1 do
+		for r = map_size, -map_size, -1 do
+			if (-q - r >= -map_size) and (-q - r <= map_size) then
+				if get_unit(q, r) ~= nil then
+					kill_unit(q, r)
+				end
+				if get_building(q, r) ~= nil then
+					destroy_building(q, r)
+				end
+			end
+		end
+	end
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+local function manage_resources(self)
+	for idx = 0, players_count, 1 do
+		resources_table[idx].gold = resources_table[idx].gold + resources_table[idx].gold_income
+		resources_table[idx].metal = resources_table[idx].metal + resources_table[idx].metal_income
+		resources_table[idx].wood = resources_table[idx].wood + resources_table[idx].wood_income
+		resources_table[idx].wheat = resources_table[idx].wheat + resources_table[idx].wheat_income
+	end
+
+	-- Resource income from collector buildings
+end
+
+local function stop_game(self, winner)
+	game_over = true
+	msg.post("loader:/go#loader", "game_over", { winner = winner })
+	msg.post("gui", "game_over", { winner = winner })
+	msg.post("#ai_controller", "game_over")
+end
+
+function on_message(self, message_id, message, sender)
+	if (message_id == hash("end_turn")) then
+		msg.post("#ai_controller", "ai_turn")
+	elseif (message_id == hash("end_ai_turn")) then
+		for q = -map_size, map_size, 1 do
+			for r = map_size, -map_size, -1 do
+				if (-q - r >= -map_size) and (-q - r <= map_size) then
+					if get_unit(q, r) ~= nil then
+						local unit = get_unit(q, r)
+						unit.can_attack = true
+						unit.current_movement_distance = unit.max_movement_distance
+					end
+				end
+			end
+		end
+		manage_resources(self)
+		msg.post("gui", "new_turn")
+	elseif (message_id == hash("castle_destroyed")) then
+		if (message.which == 0) then
+			stop_game(self, 1)
+		else
+			for q = -map_size, map_size, 1 do
+				for r = map_size, -map_size, -1 do
+					if (-q - r >= -map_size) and (-q - r <= map_size) then
+						local unit = get_unit(q, r)
+						if unit ~= nil and unit.side == message.which then
+							kill_unit(q, r)
+						end
+						local building = get_building(q, r)
+						if building ~= nil and building.side == message.which then
+							destroy_building(q, r)
+						end
+					end
+				end
+			end
+			self.destroyed_castles = self.destroyed_castles + 1
+			if (self.destroyed_castles == players_count) then
+				stop_game(self, 0)
+			end
+		end
+	end
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end
